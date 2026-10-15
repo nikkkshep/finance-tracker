@@ -1,4 +1,3 @@
-# make_payee_table.py  (project root, next to run_pipeline.py)
 import pandas as pd
 
 print("reading clean.csv...")
