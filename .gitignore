@@ -1,0 +1,6 @@
+data/private/
+*.pdf
+*.csv
+.env
+venv/
+__pycache__/
