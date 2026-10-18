@@ -1,6 +1,7 @@
 data/private/
 *.pdf
 *.csv
+!data/sample/transactions.csv
 .env
 venv/
 __pycache__/

@@ -1,21 +1,37 @@
 # src/analytics.py
 import pandas as pd
-
+ONE_OFF = 20000
 def prepare(df):
     df = df.copy()
     df["date"] = pd.to_datetime(df["date"])
     df["month"] = df["date"].dt.to_period("M")
     return df[df["category"] != "Internal Transfer"]
 
-def monthly_summary(df):
-    g = df.groupby("month")["amount"]
-    out = pd.DataFrame({
-        "income": g.apply(lambda s: s[s > 0].sum()),
-        "spend": g.apply(lambda s: -s[s < 0].sum()),
-    })
-    out["net"] = out["income"] - out["spend"]
-    out["savings_rate"] = (out["net"] / out["income"]).where(out["income"] > 0)
-    return out
+def monthly_summary(df, one_off=ONE_OFF):
+    d = df.copy()
+    credit = d["amount"].where(d["amount"] > 0, 0)
+    debit = (-d["amount"]).where(d["amount"] < 0, 0)
+    is_allow = d["category"] == "Allowance"
+
+    d["allowance"] = credit.where(is_allow & (credit < one_off), 0)
+    d["allowance_oneoff"] = credit.where(is_allow & (credit >= one_off), 0)
+    d["received_other"] = credit.where(~is_allow, 0)
+    d["spend_regular"] = debit.where(debit < one_off, 0)
+    d["spend_oneoff"] = debit.where(debit >= one_off, 0)
+
+    cols = ["allowance", "allowance_oneoff", "received_other",
+            "spend_regular", "spend_oneoff"]
+    m = d.groupby("month")[cols].sum()
+    m["used_pct"] = (m["spend_regular"]
+                     / m["allowance"].where(m["allowance"] > 0) * 100).round(0)
+    m["txns"] = d.groupby("month").size()
+
+    first, last = d["date"].min(), d["date"].max()
+    m["partial"] = False
+    m.loc[m.index[0], "partial"] = first.day > 1
+    if last.day < last.days_in_month:
+        m.loc[m.index[-1], "partial"] = True
+    return m.round(0)
 
 def category_by_month(df):
     sp = df[df["amount"] < 0].assign(spend=lambda d: -d["amount"])

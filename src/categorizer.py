@@ -9,21 +9,20 @@ OWN_NAME = os.environ.get("OWN_NAME", "").upper().strip()
 CATEGORIES = [
     "Food", "Groceries", "Travel", "Shopping", "Bills & Subscriptions",
     "Education", "Personal Care", "Health", "Entertainment & Sports",
-    "Government & Fees", "Person-to-Person", "Income",
+    "Government & Fees", "Person-to-Person", "Allowance",
     "Internal Transfer", "Cash", "Other",
 ]
-
 KEYWORDS = {
-    "Food": ["ZOMATO", "SWIGGY", "CANTEEN", "SWEET", "BAKER", "BAKERY", "CAFE", "PIZZA", "JUICE", "DHABA", "FOODS", "DOMINOS", "DOMINOSPIZZA"],
+    "Food": ["ZOMATO", "SWIGGY", "CANTEEN", "SWEET", "BAKER", "BAKERY", "CAFE",
+             "PIZZA", "JUICE", "DHABA", "FOODS", "DOMINOSPIZZA"],
     "Groceries": ["ZEPTO", "BLINKIT", "INSTAMART", "BIGBASKET", "KIRYANA", "GROCERY"],
     "Travel": ["UBER", "OLA", "RAPIDO", "IRCTC", "REDBUS", "METRO"],
     "Bills & Subscriptions": ["NETFLIX", "SPOTIFY", "AIRTEL", "JIO", "RECHARGE", "FAMAPP"],
     "Personal Care": ["SALON", "HAIR"],
-    "Cash": ["BY CASH", "ATM"],
-    "Food": [..., "DOMINOSPIZZA"],
     "Health": ["DOCTOR", "NUTRITION", "PHARMACY", "MEDICAL", "CHEMIST", "HOSPITAL"],
     "Entertainment & Sports": ["MOVIE", "BOOKMYSHOW", "PVR"],
     "Government & Fees": ["PASSPORT"],
+    "Cash": ["BY CASH", "ATM"],
 }
 
 def _norm(s):
