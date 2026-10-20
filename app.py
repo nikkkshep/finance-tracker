@@ -2,6 +2,7 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import json
 
 PRIVATE = Path("data/private/categorized.csv")     # your real data, local only
 SAMPLE = Path("data/sample/transactions.csv")      # synthetic demo data
@@ -28,6 +29,9 @@ if not sources:
 
 choice = st.sidebar.radio("Data source", list(sources))
 df = load(sources[choice])
+palette = px.colors.qualitative.Bold
+CAT_COLORS = {c: palette[i % len(palette)] for i, c in enumerate(sorted(df["category"].unique()))}
+CAT_COLORS["Person-to-Person"] = "#8A8F98"   # grey, so informative categories stand out
 
 min_d, max_d = df["date"].min().date(), df["date"].max().date()
 rng = st.sidebar.date_input("Date range", (min_d, max_d), min_value=min_d, max_value=max_d)
@@ -41,7 +45,7 @@ cats = sorted(df.loc[is_spend, "category"].unique())
 picked = st.sidebar.multiselect("Categories", cats, default=cats)
 
 hide_big = st.sidebar.checkbox("Hide one-off payments", value=True)
-big = st.sidebar.slider("One-off means above (Rs)", 5000, 200000, 20000, step=5000)
+big = st.sidebar.slider("One-off means above (₹)", 5000, 200000, 20000, step=5000)
 
 mask = (is_spend & df["category"].isin(picked)
         & df["date"].between(pd.Timestamp(start), pd.Timestamp(end)))
@@ -63,12 +67,17 @@ days = (end - start).days + 1
 by_cat = spend.groupby("category", as_index=False)["spend"].sum().sort_values("spend", ascending=False)
 monthly = spend.groupby("month")["spend"].sum()
 
+people = spend.loc[spend["category"] == "Person-to-Person", "spend"].sum()
+shops = by_cat[by_cat["category"] != "Person-to-Person"]
+top = shops.iloc[0] if not shops.empty else by_cat.iloc[0]
+
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total spent", f"₹{total:,.0f}")
 c2.metric("Average per month", f"₹{total / days * 30.4:,.0f}")
-c3.metric("Top category", by_cat.iloc[0]["category"],
-          f"{by_cat.iloc[0]['spend'] / total:.0%} of spend", delta_color="off")
-c4.metric("Transactions", f"{len(spend):,}")
+c3.metric("Top category", top["category"].split(" &")[0],
+          f"{top['spend'] / total:.0%} of spend", delta_color="off")
+c4.metric("Sent to people", f"₹{people:,.0f}",
+          f"{people / total:.0%} of spend", delta_color="off")
 
 top_day = spend.groupby("weekday")["spend"].sum().idxmax()
 st.markdown(
@@ -78,11 +87,12 @@ st.markdown(
 )
 
 # ---------- tabs ----------
-tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Categories", "Payees", "Transactions"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Overview", "Categories", "Payees", "Transactions", "Model"])
 
 with tab1:
     m = spend.groupby(["month", "category"], as_index=False)["spend"].sum()
     st.plotly_chart(px.bar(m, x="month", y="spend", color="category",
+                           color_discrete_map=CAT_COLORS,
                            title="Monthly spending by category"))
     daily = spend.set_index("date")["spend"].resample("D").sum()
     roll = daily.rolling(7, min_periods=1).mean().reset_index()
@@ -94,6 +104,7 @@ with tab1:
 with tab2:
     left, right = st.columns(2)
     left.plotly_chart(px.pie(by_cat, names="category", values="spend", hole=0.55,
+                              color="category", color_discrete_map=CAT_COLORS,
                              title="Share of spending"))
     tm = spend.groupby(["category", "payee_norm"], as_index=False)["spend"].sum()
     right.plotly_chart(px.treemap(tm, path=[px.Constant("All spending"), "category", "payee_norm"],
@@ -117,3 +128,28 @@ with tab4:
     st.dataframe(show, hide_index=True)
     st.download_button("Download filtered CSV", show.to_csv(index=False),
                        "transactions.csv", "text/csv")
+
+with tab5:
+    st.subheader("Does ML help? An honest comparison")
+    st.caption("Measured offline on the author's real bank statement: 689 labeled payments "
+               "from 107 payees, tested on payees the model had never seen. "
+               "The transactions in the other tabs are synthetic when Demo data is selected.")
+    res = pd.DataFrame({
+        "Task": ["Person vs merchant"] * 3 + ["Six categories"] * 3,
+        "Method": ["Guess the common class", "One-line rule", "ML model",
+                   "Guess the common class", "Keyword rules", "ML model"],
+        "Accuracy": [72.7, 97.2, 98.1, 28.6, 36.0, 49.1],
+    })
+    fig = px.bar(res, x="Accuracy", y="Task", color="Method", barmode="group",
+                 orientation="h", text="Accuracy", range_x=[0, 100])
+    fig.update_traces(texttemplate="%{text:.1f}%")
+    st.plotly_chart(fig)
+    st.markdown(
+        "**Telling people from shops is easy.** One rule (the payee has sent me money) "
+        "gets 97.2%, and the ML model adds under a point.\n\n"
+        "**Telling food from groceries from bills is hard.** With 107 payees, ML reaches "
+        "49.1% against 36.0% for keyword rules, but that gain comes from separating people "
+        "from shops. Among shop payments alone, the rules do better.\n\n"
+        "**Why split by payee?** A random split scored 93.3%, because the model remembers "
+        "names. Testing on unseen payees is the honest measure."
+    )

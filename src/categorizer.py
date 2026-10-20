@@ -37,7 +37,7 @@ def load_labels(path):
         raise ValueError(f"Unknown categories in label file: {bad}")
     return dict(zip(lab["payee_norm"], lab["category"]))
 
-def _row_category(payee_norm, desc, labels):
+def _row_category(payee_norm, desc, labels, received_from):
     if payee_norm in labels:
         return labels[payee_norm], "label"
     if OWN_NAME and OWN_NAME in desc:
@@ -45,12 +45,15 @@ def _row_category(payee_norm, desc, labels):
     for cat, words in KEYWORDS.items():
         if any(re.search(rf"\b{re.escape(w)}\b", desc) for w in words):
             return cat, "keyword"
+    if payee_norm in received_from:
+        return "Person-to-Person", "received-rule"
     return "Other", "none"
 
 def categorize(df, labels):
     df = df.copy()
     df["payee_norm"] = df["payee"].map(_norm)
     desc = df["description"].map(_norm)
-    res = [_row_category(p, d, labels) for p, d in zip(df["payee_norm"], desc)]
+    received_from = set(df.loc[df["amount"] > 0, "payee_norm"])
+    res = [_row_category(p, d, labels, received_from) for p, d in zip(df["payee_norm"], desc)]
     df["category"], df["cat_source"] = zip(*res)
     return df
